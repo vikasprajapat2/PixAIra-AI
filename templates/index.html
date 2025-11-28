@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-gray-50">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PixAIra</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+</head>
+
+<body class="h-full">
+
+    <div class="min-h-full flex flex-col">
+        <!-- Header -->
+        <header class="bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg">
+            <div class="max-w-6xl mx-auto px-4 py-6 text-center">
+                <h1 class="text-4xl font-bold flex items-center justify-center gap-3">
+                    <i class="fas fa-wand-magic-sparkles"></i>
+                    PixAIra
+                </h1>
+                <p class="mt-2 text-purple-100">Text ↔ Image Generation</p>
+            </div>
+        </header>
+
+        <!-- Tabs -->
+        <div class="max-w-6xl mx-auto px-4 py-8 flex-1">
+            <div class="flex justify-center mb-8">
+                <div class="bg-white rounded-xl shadow-md p-1 inline-flex">
+                    <button onclick="showTab('text2img')" id="tab1"
+                        class="tab-btn active px-8 py-3 rounded-lg font-medium transition">
+                        Text → Image
+                    </button>
+                    <button onclick="showTab('img2text')" id="tab2"
+                        class="tab-btn px-8 py-3 rounded-lg font-medium transition">
+                        Image → Text
+                    </button>
+                </div>
+            </div>
+
+            <!-- Text to Image Tab -->
+            <div id="text2img-tab" class="tab-content">
+                <div class="bg-white rounded-2xl shadow-xl p-8 max-w-3xl mx-auto">
+                    <textarea id="prompt" placeholder="Describe the image you want..."
+                        class="w-full p-4 border-2 border-purple-200 rounded-xl focus:border-purple-500 focus:outline-none text-lg"
+                        rows="4"></textarea>
+                    <button onclick="generateImage()"
+                        class="mt-6 w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold py-4 rounded-xl hover:shadow-lg transform hover:scale-105 transition">
+                        Generate Image
+                    </button>
+                    <div id="result-t2i" class="mt-8 text-center"></div>
+                </div>
+            </div>
+
+            <!-- Image to Text Tab -->
+            <div id="img2text-tab" class="tab-content hidden">
+                <div class="bg-white rounded-2xl shadow-xl p-8 max-w-3xl mx-auto text-center">
+                    <div class="border-4 border-dashed border-purple-300 rounded-xl p-12 cursor-pointer"
+                        onclick="document.getElementById('file-input').click()">
+                        <i class="fas fa-cloud-upload-alt text-6xl text-purple-400 mb-4"></i>
+                        <p class="text-xl text-gray-600">Click or drag an image here</p>
+                        <input type="file" id="file-input" accept="image/*" class="hidden" onchange="uploadImage()" />
+                    </div>
+                    <button onclick="generateCaption()"
+                        class="mt-6 w-full bg-gradient-to-r from-pink-600 to-purple-600 text-white font-bold py-4 rounded-xl opacity-0 hover:shadow-lg transition"
+                        id="caption-btn" disabled>
+                        Generate Caption
+                    </button>
+                    <div id="result-i2t" class="mt-8"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function showTab(tab) {
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.add('hidden'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active', 'bg-purple-600', 'text-white'));
+
+            if (tab === 'text2img') {
+                document.getElementById('text2img-tab').classList.remove('hidden');
+                document.getElementById('tab1').classList.add('active', 'bg-purple-600', 'text-white');
+            } else {
+                document.getElementById('img2text-tab').classList.remove('hidden');
+                document.getElementById('tab2').classList.add('active', 'bg-purple-600', 'text-white');
+            }
+        }
+
+        // Text to Image
+        async function generateImage() {
+            const prompt = document.getElementById('prompt').value.trim();
+            if (!prompt) return alert("Please enter a description!");
+
+            const resultDiv = document.getElementById('result-t2i');
+            resultDiv.innerHTML = `<p class="text-purple-600"><i class="fas fa-spinner fa-spin"></i> Generating magic...</p>`;
+
+            const res = await fetch('/text-to-image', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt })
+            });
+
+            const data = await res.json();
+            if (data.image_url) {
+                resultDiv.innerHTML = `<img src="${data.image_url}?t=${Date.now()}" class="rounded-xl shadow-2xl max-w-full mx-auto" alt="Generated"/>`;
+            } else {
+                resultDiv.innerHTML = `<p class="text-red-500">Error: ${data.error}</p>`;
+            }
+        }
+
+        // Image to Text
+        let uploadedImageUrl = null;
+
+        function uploadImage() {
+            const file = document.getElementById('file-input').files[0];
+            if (file) {
+                uploadedImageUrl = URL.createObjectURL(file);
+                document.getElementById('result-i2t').innerHTML = `
+      <img src="${uploadedImageUrl}" class="rounded-xl shadow-2xl max-w-full mx-auto mb-6"/>
+      <p class="text-gray-600">Image uploaded! Now click the button below.</p>
+    `;
+                document.getElementById('caption-btn').classList.remove('opacity-0');
+                document.getElementById('caption-btn').disabled = false;
+            }
+        }
+
+        async function generateCaption() {
+            const file = document.getElementById('file-input').files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('image', file);
+
+            document.getElementById('result-i2t').innerHTML += `<p class="text-purple-600 mt-4"><i class="fas fa-spinner fa-spin"></i> Thinking...</p>`;
+
+            const res = await fetch('/image-to-text', { method: 'POST', body: formData });
+            const data = await res.json();
+
+            if (data.caption) {
+                document.getElementById('result-i2t').innerHTML = `
+      <img src="${uploadedImageUrl}" class="rounded-xl shadow-2xl max-w-full mx-auto mb-6"/>
+      <div class="bg-purple-100 p-6 rounded-xl text-xl font-medium text-purple-900">
+        "${data.caption}"
+      </div>
+    `;
+            } else {
+                document.getElementById('result-i2t').innerHTML += `<p class="text-red-500">Error: ${data.error}</p>`;
+            }
+        }
+    </script>
+
+</body>
+
+</html>
