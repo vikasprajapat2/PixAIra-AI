@@ -1,5 +1,5 @@
 import torch
-from diffusers import DiffusionPipeline
+from diffusers import DiffusionPipeline, DPMSolverMultistepScheduler
 from transformers import BlipProcessor, BlipForConditionalGeneration
 from PIL import Image
 import gc
@@ -15,15 +15,18 @@ def get_device():
 def load_t2i_model():
     global t2i_pipe
     if t2i_pipe is None:
-        print("Loading Text-to-Image model (SD 1.5)...")
+        print("Loading Text-to-Image model (Dreamlike Diffusion 1.0)...")
         device = get_device()
         try:
-            # Using Stable Diffusion 1.5 which is lighter and more reliable than SDXL
+            # Using Dreamlike Diffusion 1.0 as requested
             t2i_pipe = DiffusionPipeline.from_pretrained(
-                "runwayml/stable-diffusion-v1-5", 
+                "dreamlike-art/dreamlike-diffusion-1.0", 
                 torch_dtype=torch.float16 if device == "cuda" else torch.float32,
                 use_safetensors=True
             )
+            # Use DPM++ 2M Karras scheduler for faster generation
+            t2i_pipe.scheduler = DPMSolverMultistepScheduler.from_config(t2i_pipe.scheduler.config)
+            
             t2i_pipe.to(device)
             # Enable memory slicing to save VRAM
             if device == "cuda":
@@ -65,8 +68,8 @@ def text_to_image(prompt):
         pipe.to(device)
 
     print(f"Generating image for: {prompt}")
-    # 25 steps is standard for SD1.5. 
-    image = pipe(prompt, num_inference_steps=25).images[0]
+    # 20 steps with DPM++ 2M Karras is usually good enough and faster
+    image = pipe(prompt, num_inference_steps=20).images[0]
     return image
 
 def image_to_text(image_path):
